@@ -48,7 +48,7 @@ jobs:
         cd vpnclient
         test -f Makefile || { echo "Makefile not found"; exit 1; }
         make clean || true
-        make main
+        make CC=$CC main
 
     - name: Verify binaries
       run: |
