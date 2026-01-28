@@ -76,14 +76,14 @@ jobs:
         export AR=aarch64-openwrt-linux-musl-ar
         export RANLIB=aarch64-openwrt-linux-musl-ranlib
 
-        export CFLAGS="-O2 -fPIC"
-        export LDFLAGS=""
+        export CFLAGS="-O2 -fPIC --sysroot=$STAGING_DIR/target-aarch64_cortex-a72_musl"
+        export LDFLAGS="--sysroot=$STAGING_DIR/target-aarch64_cortex-a72_musl"
 
         cd SoftEtherVPN_Stable
 
         # SoftEther build system
         ./configure
-        make -C build
+        make
 
     - name: Collect binaries
       run: |
