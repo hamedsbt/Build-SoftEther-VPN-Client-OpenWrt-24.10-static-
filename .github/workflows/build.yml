@@ -78,13 +78,21 @@ jobs:
 
         export CFLAGS="-O2 -fPIC --sysroot=$STAGING_DIR/target-aarch64_cortex-a72_musl"
         export LDFLAGS="--sysroot=$STAGING_DIR/target-aarch64_cortex-a72_musl"
-
+        
         cd SoftEtherVPN_Stable
-
-        # SoftEther build system
+        
         ./configure
+        
+        # Fix ARM64 flag
         sed -i 's/-m64//g' Makefile
+        
+        # Use libedit instead of readline
+        sed -i 's|#include <readline/readline.h>|#include <editline/readline.h>|' src/Mayaqua/Mayaqua.h
+        
+        export LDFLAGS="$LDFLAGS -ledit"
+        
         make
+
 
     - name: Collect binaries
       run: |
