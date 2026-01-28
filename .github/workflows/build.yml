@@ -1,4 +1,4 @@
-name: Build SoftEther VPN Client (OpenWrt 24.10.2, static)
+name: Build SoftEther VPN Client (OpenWrt 24.10, dynamic, ARM64)
 
 on:
   push:
@@ -12,53 +12,92 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Install build dependencies
+    - name: Install host dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y \
           build-essential \
           wget \
+          git \
           xz-utils \
-          file
+          file \
+          patch
 
     - name: Download OpenWrt SDK (24.10.2, RPi4)
       run: |
         wget https://archive.openwrt.org/releases/24.10.2/targets/bcm27xx/bcm2711/openwrt-sdk-24.10.2-bcm27xx-bcm2711_gcc-13.3.0_musl.Linux-x86_64.tar.zst
         tar xf openwrt-sdk-24.10.2-bcm27xx-bcm2711_gcc-13.3.0_musl.Linux-x86_64.tar.zst
-        
-    - name: Download SoftEther VPN Client
-      run: |
-        wget https://github.com/SoftEtherVPN/SoftEtherVPN_Stable/releases/download/v4.44-9807-rtm/softether-vpnclient-v4.44-9807-rtm-2025.04.16-linux-arm64-64bit.tar.gz
-        tar xf softether-vpnclient-v4.44-9807-rtm-2025.04.16-linux-arm64-64bit.tar.gz
 
-    - name: Build static SoftEther binaries
+    - name: Clone SoftEther source
+      run: |
+        git clone --depth=1 https://github.com/SoftEtherVPN/SoftEtherVPN_Stable.git
+        cd SoftEtherVPN_Stable
+        git submodule update --init --recursive
+
+    - name: Apply musl compatibility patch
+      run: |
+        cd SoftEtherVPN_Stable
+
+        cat << 'EOF' > src/Mayaqua/MuslCompat.h
+        #pragma once
+        #ifdef __linux__
+        #ifdef __MUSL__
+        #define open64      open
+        #define creat64     creat
+        #define fopen64     fopen
+        #define lseek64     lseek
+        #define statfs64    statfs
+        #define scandir64   scandir
+        #define alphasort64 alphasort
+        #define getrlimit64 getrlimit
+        #define setrlimit64 setrlimit
+        #define __strdup    strdup
+        #include <string.h>
+        #include <stddef.h>
+        static inline void *__rawmemchr(const void *s, int c) {
+            return memchr(s, c, (size_t)-1);
+        }
+        #define __rawmemchr __rawmemchr
+        #endif
+        #endif
+        EOF
+
+        # Inject header into Mayaqua
+        sed -i '1i #include "MuslCompat.h"' src/Mayaqua/Mayaqua.h
+
+    - name: Build SoftEther VPN Client (dynamic)
       run: |
         SDK=$(pwd)/openwrt-sdk-24.10.2-bcm27xx-bcm2711_gcc-13.3.0_musl.Linux-x86_64
         TOOLCHAIN=$SDK/staging_dir/toolchain-aarch64_cortex-a72_gcc-13.3.0_musl
 
         export PATH=$TOOLCHAIN/bin:$PATH
+        export STAGING_DIR=$SDK/staging_dir
         export CC=aarch64-openwrt-linux-musl-gcc
         export AR=aarch64-openwrt-linux-musl-ar
         export RANLIB=aarch64-openwrt-linux-musl-ranlib
 
-        # Enforce full static
-        export CFLAGS="-O2 -fPIE -static -fstack-protector-strong -D_FORTIFY_SOURCE=2"
-        export LDFLAGS="-static -pie -Wl,-z,now -Wl,-z,relro"
+        export CFLAGS="-O2 -fPIC"
+        export LDFLAGS=""
 
-        cd vpnclient
-        test -f Makefile || { echo "Makefile not found"; exit 1; }
-        make clean || true
-        make CC=$CC main
+        cd SoftEtherVPN_Stable
+
+        # SoftEther build system
+        ./configure
+        make -C build
+
+    - name: Collect binaries
+      run: |
+        mkdir -p artifacts
+        find SoftEtherVPN_Stable -type f -name vpnclient -exec cp {} artifacts/ \;
+        find SoftEtherVPN_Stable -type f -name vpncmd -exec cp {} artifacts/ \;
 
     - name: Verify binaries
       run: |
-        file softether/vpnclient
-        file softether/vpncmd
+        file artifacts/vpnclient
+        file artifacts/vpncmd
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: softether-openwrt-static
-        path: |
-          softether/vpnclient
-          softether/vpncmd
+        name: softether-openwrt-dynamic
+        path: artifacts/*
