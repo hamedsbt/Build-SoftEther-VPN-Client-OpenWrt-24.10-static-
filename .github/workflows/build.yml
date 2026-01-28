@@ -83,6 +83,7 @@ jobs:
 
         # SoftEther build system
         ./configure
+        sed -i 's/-m64//g' Makefile
         make
 
     - name: Collect binaries
