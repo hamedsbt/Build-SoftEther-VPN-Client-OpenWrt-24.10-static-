@@ -25,6 +25,11 @@ jobs:
       run: |
         wget https://archive.openwrt.org/releases/24.10.2/targets/bcm27xx/bcm2711/openwrt-sdk-24.10.2-bcm27xx-bcm2711_gcc-13.3.0_musl.Linux-x86_64.tar.zst
         tar xf openwrt-sdk-24.10.2-bcm27xx-bcm2711_gcc-13.3.0_musl.Linux-x86_64.tar.zst
+        
+    - name: Download SoftEther VPN Client
+      run: |
+        wget https://github.com/SoftEtherVPN/SoftEtherVPN_Stable/releases/download/v4.44-9807-rtm/softether-vpnclient-v4.44-9807-rtm-2025.04.16-linux-arm64-64bit.tar.gz
+        tar xf softether-vpnclient-v4.44-9807-rtm-2025.04.16-linux-arm64-64bit.tar.gz
 
     - name: Build static SoftEther binaries
       run: |
@@ -41,6 +46,7 @@ jobs:
         export LDFLAGS="-static -pie -Wl,-z,now -Wl,-z,relro"
 
         cd softether
+        test -f Makefile || { echo "Makefile not found"; exit 1; }
         make clean || true
         make main
 
